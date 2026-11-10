@@ -224,4 +224,6 @@ class TranscritorDeTeste:
         self._contador += 1
         if self._frases:
             return self._frases[(self._contador - 1) % len(self._frases)]
-        return f"Trecho {self._contador} com {len(audio) / TAXA:.1f} segundos de fala."
+        segundos = len(audio) / TAXA
+        # como no Whisper de verdade, mais áudio dá mais texto (cerca de 2 palavras por segundo)
+        return f"Trecho {self._contador} com {segundos:.1f} segundos de fala" + " palavra" * int(segundos * 2) + "."

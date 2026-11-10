@@ -38,6 +38,12 @@ class Ouvinte:
         except Exception:
             pass
 
+    def esperar_fim(self, tipo: str, limite=20.0) -> dict:
+        """Espera terminar a sugestão mais recente do tipo pedido (auto, agora ou pergunta)."""
+        inicio = self.esperar(lambda e: e["tipo"] == "sugestao_inicio" and e["sugestao"]["tipo"] == tipo, limite)[-1]
+        sid = inicio["sugestao"]["id"]
+        return self.esperar(lambda e: e["tipo"] in ("sugestao_fim", "sugestao_erro") and e["id"] == sid, limite)[0]
+
     def esperar(self, condicao, limite=30.0):
         fim = time.time() + limite
         while time.time() < fim:
@@ -107,9 +113,11 @@ def test_fluxo_completo(ambiente):
 
     ouvinte.esperar(lambda e: e["tipo"] == "ouvindo" and not e["ativo"], 20)  # o arquivo terminou
 
-    # sugestão pedida na hora, em fluxo
+    # sugestão pedida na hora, em fluxo (acha o cartão pelo tipo, não pela ordem: uma
+    # sugestão automática pode ter saído enquanto o arquivo tocava)
     assert post(base, "/api/sugerir")[0] == 200
-    fim = ouvinte.esperar(lambda e: e["tipo"] == "sugestao_fim" and e["estado"] == "pronta", 20)[0]
+    fim = ouvinte.esperar_fim("agora")
+    assert fim["estado"] == "pronta"
     assert "Pergunte:" in fim["texto"] and fim["latencia_s"] is not None
     pedacos = [e for e in ouvinte.eventos if e["tipo"] == "sugestao_trecho" and e["id"] == fim["id"]]
     assert len(pedacos) > 5, "o texto deve chegar aos poucos"
@@ -117,12 +125,12 @@ def test_fluxo_completo(ambiente):
 
     # pergunta direta
     assert post(base, "/api/perguntar", {"texto": "Qual foi o prazo combinado?"})[0] == 200
-    ouvinte.esperar(lambda e: e["tipo"] == "sugestao_fim" and e["estado"] == "pronta" and e["id"] != fim["id"], 20)
+    assert ouvinte.esperar_fim("pergunta")["estado"] == "pronta"
 
-    # o que foi enviado à API
+    # o que foi enviado à API (o pedido da pergunta)
     pedidos = api.pedidos
     assert len(pedidos) >= 3
-    p = pedidos[-1]
+    p = next(x for x in reversed(pedidos) if "Qual foi o prazo combinado?" in x["messages"][0]["content"][-1]["text"])
     assert p["model"] == "claude-haiku-5-5"
     assert p["thinking"] == {"type": "disabled"}
     assert p["output_config"] == {"effort": "low"}
@@ -143,8 +151,9 @@ def test_fluxo_completo(ambiente):
 
     # Sonnet usa o modo sem raciocínio prévio aceito por ele
     post(base, "/api/config", {"modelo_ia": "claude-sonnet-5-5"})
+    antes = len(api.pedidos)
     post(base, "/api/sugerir")
-    ouvinte.esperar(lambda e: e["tipo"] == "sugestao_fim" and len(api.pedidos) >= 4, 20)
+    ouvinte.esperar(lambda e: e["tipo"] == "sugestao_fim" and len(api.pedidos) > antes, 20)
     assert api.pedidos[-1]["model"] == "claude-sonnet-5-5"
     assert api.pedidos[-1]["thinking"] == {"type": "between_tools"}
 
