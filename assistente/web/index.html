@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistente ao Vivo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231f5fbf'/%3E%3Crect x='12' y='7' width='8' height='13' rx='4' fill='white'/%3E%3Cpath d='M9 15a7 7 0 0 0 14 0M16 22v4' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --fundo: #f4f5f7;
+    --painel: #ffffff;
+    --borda: #dfe2e7;
+    --texto: #1c2430;
+    --suave: #5d6878;
+    --fraco: #8a94a3;
+    --destaque: #1f5fbf;
+    --destaque-fundo: #e8f0fc;
+    --perigo: #c62f2f;
+    --perigo-fundo: #fdecec;
+    --ok: #1d7a46;
+    --aviso: #9a6200;
+    --aviso-fundo: #fff4dc;
+    --sombra: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .05);
+    --raio: 10px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #12161c;
+      --painel: #1a2028;
+      --borda: #2c3540;
+      --texto: #e6ebf2;
+      --suave: #a3aebd;
+      --fraco: #75808f;
+      --destaque: #6aa2ff;
+      --destaque-fundo: #1d2a40;
+      --perigo: #ff6b6b;
+      --perigo-fundo: #3a1f22;
+      --ok: #4cc38a;
+      --aviso: #f0b44c;
+      --aviso-fundo: #3a2e15;
+      --sombra: none;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--texto);
+    font: 15px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100vh; overflow: hidden;
+  }
+  @media (max-width: 900px) { body { height: auto; min-height: 100vh; overflow: visible; grid-template-rows: auto auto auto auto; } }
+  body > header { grid-row: 1; }
+  body > #faixa { grid-row: 2; }
+  body > main { grid-row: 3; }
+  body > footer { grid-row: 4; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button {
+    border: 1px solid var(--borda); background: var(--painel); border-radius: 8px;
+    padding: 7px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--suave); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primario { background: var(--destaque); border-color: var(--destaque); color: #fff; font-weight: 600; }
+  button.perigo { background: var(--perigo); border-color: var(--perigo); color: #fff; font-weight: 600; }
+  button.discreto { border-color: transparent; background: transparent; color: var(--suave); }
+  button.discreto:hover { color: var(--texto); border-color: var(--borda); }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    border: 1px solid var(--borda); background: var(--painel); border-radius: 8px; padding: 7px 10px; width: 100%;
+  }
+  textarea { resize: vertical; }
+  a { color: var(--destaque); }
+
+  /* cabeçalho */
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 18px; background: var(--painel); border-bottom: 1px solid var(--borda);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .marca { font-weight: 700; font-size: 16px; letter-spacing: .2px; margin-right: 4px; }
+  #btnOuvir { min-width: 118px; font-size: 15px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+  #btnOuvir .ponto { width: 10px; height: 10px; border-radius: 50%; background: currentColor; display: inline-block; }
+  #btnOuvir.ativo .ponto { animation: pulsar 1.2s infinite; }
+  @keyframes pulsar { 50% { opacity: .25; } }
+  #niveis { display: flex; gap: 12px; align-items: center; }
+  .medidor { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--suave); }
+  .medidor .barra { width: 70px; height: 7px; border-radius: 4px; background: var(--borda); overflow: hidden; }
+  .medidor .barra i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .15s; }
+  .medidor.falando .barra i { background: var(--destaque); }
+  #status { font-size: 13px; color: var(--suave); flex: 1 1 260px; min-width: 200px; }
+  #status.erro { color: var(--perigo); }
+  #status.pronto { color: var(--ok); }
+  #custo { font-size: 12px; color: var(--fraco); white-space: nowrap; }
+  .acoes { display: flex; gap: 8px; }
+
+  #faixa {
+    display: none; margin: 12px 18px 0; padding: 10px 14px; border-radius: var(--raio);
+    background: var(--aviso-fundo); color: var(--texto); border: 1px solid var(--borda); font-size: 14px;
+  }
+  #faixa.visivel { display: block; }
+
+  main {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px;
+    padding: 14px 18px; min-height: 0;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section.coluna {
+    background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra);
+    display: flex; flex-direction: column; min-height: 0; height: 100%;
+  }
+  @media (max-width: 900px) { section.coluna { height: auto; max-height: 65vh; min-height: 180px; } }
+  .topo-coluna {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--borda);
+  }
+  .topo-coluna h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--suave); margin: 0; flex: 1; }
+  .rolagem { overflow-y: auto; padding: 12px 14px; flex: 1; min-height: 0; }
+  label.checagem { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); cursor: pointer; }
+  .girando { width: 14px; height: 14px; border: 2px solid var(--borda); border-top-color: var(--destaque); border-radius: 50%; animation: girar .8s linear infinite; display: none; }
+  .girando.visivel { display: inline-block; }
+  @keyframes girar { to { transform: rotate(360deg); } }
+
+  /* sugestões */
+  .cartao {
+    border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px 14px; margin-bottom: 10px;
+    background: var(--painel); transition: opacity .3s;
+  }
+  .cartao.nova { border-color: var(--destaque); box-shadow: 0 0 0 1px var(--destaque) inset; }
+  .cartao.andamento { border-style: dashed; }
+  .cartao.antiga { opacity: .62; }
+  .cartao.antiga:hover { opacity: 1; }
+  .cartao .meta { font-size: 12px; color: var(--fraco); display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cartao .pergunta { font-style: italic; color: var(--suave); margin: 2px 0 6px; }
+  .cartao ul { margin: 0; padding-left: 0; list-style: none; }
+  .cartao li { font-size: 18px; line-height: 1.4; margin: 6px 0; padding-left: 14px; position: relative; }
+  .cartao li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--destaque); }
+  .cartao p { font-size: 17px; margin: 6px 0; }
+  .cartao .rotulo { color: var(--destaque); font-weight: 650; }
+  .cartao .marca-honestidade { font-size: 12px; border: 1px solid var(--aviso); color: var(--aviso); border-radius: 4px; padding: 0 4px; margin-right: 4px; white-space: nowrap; }
+  .cartao .erro { color: var(--perigo); font-size: 15px; }
+  .cartao .vazia { color: var(--fraco); font-size: 14px; }
+  .vazio-lista { color: var(--fraco); font-size: 14px; padding: 10px 2px; }
+
+  /* transcrição */
+  .linha { display: grid; grid-template-columns: 62px auto 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--borda); align-items: baseline; }
+  .linha:last-child { border-bottom: 0; }
+  .linha .hora { font-size: 12px; color: var(--fraco); font-variant-numeric: tabular-nums; }
+  .linha .origem { font-size: 11px; border-radius: 4px; padding: 0 5px; background: var(--destaque-fundo); color: var(--destaque); white-space: nowrap; }
+  .linha .origem.pc { background: var(--aviso-fundo); color: var(--aviso); }
+  .linha .texto { font-size: 15px; }
+  #interim { color: var(--fraco); font-style: italic; padding: 6px 0 0 70px; min-height: 1.4em; }
+
+  /* pergunta */
+  footer { padding: 0 18px 14px; }
+  #formPergunta { display: flex; gap: 10px; background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio); padding: 8px; box-shadow: var(--sombra); }
+  #campoPergunta { border: 0; font-size: 16px; padding: 8px 10px; background: transparent; }
+  #campoPergunta:focus { outline: none; }
+  .dica { font-size: 12px; color: var(--fraco); margin-top: 6px; }
+  kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--borda); border-radius: 4px; padding: 0 4px; }
+
+  /* diálogos */
+  dialog { border: 1px solid var(--borda); border-radius: 14px; padding: 0; width: min(720px, 94vw); background: var(--painel); color: var(--texto); box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(10, 15, 25, .45); }
+  .dlg-topo { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--borda); }
+  .dlg-topo h3 { margin: 0; flex: 1; font-size: 17px; }
+  .dlg-corpo { padding: 14px 18px; max-height: 72vh; overflow-y: auto; }
+  .campo { margin-bottom: 14px; }
+  .campo > label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .campo .ajuda { font-size: 12.5px; color: var(--suave); margin-top: 4px; }
+  .linha-campos { display: flex; gap: 8px; align-items: center; }
+  .linha-campos > * { flex: 1; }
+  .linha-campos > button { flex: 0 0 auto; }
+  fieldset { border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px 14px 4px; margin: 0 0 14px; }
+  legend { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--suave); padding: 0 6px; }
+  details summary { cursor: pointer; color: var(--suave); font-size: 13px; margin-bottom: 8px; }
+
+  /* avisos */
+  #avisos { position: fixed; right: 16px; bottom: 90px; display: flex; flex-direction: column; gap: 8px; z-index: 20; max-width: min(440px, 90vw); }
+  .aviso { background: var(--texto); color: var(--painel); padding: 10px 14px; border-radius: 10px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .aviso.erro { background: var(--perigo); color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <span class="marca">Assistente ao Vivo</span>
+  <button id="btnOuvir" class="primario" title="Começar ou parar de ouvir"><span class="ponto"></span><span class="rotulo-btn">Ouvir</span></button>
+  <div id="niveis"></div>
+  <div id="status">Conectando ao programa...</div>
+  <span id="custo" title="Custo estimado das sugestões nesta sessão">US$ 0,0000</span>
+  <div class="acoes">
+    <button id="btnContexto" title="Contexto do caso e tipo de conversa">Contexto</button>
+    <button id="btnAjustes" title="Ajustes">Ajustes</button>
+  </div>
+</header>
+
+<div id="faixa"></div>
+
+<main>
+  <section class="coluna" aria-label="Sugestões">
+    <div class="topo-coluna">
+      <h2>Sugestões</h2>
+      <span id="iaOcupada" class="girando" title="O Claude está escrevendo"></span>
+      <label class="checagem" title="Pede sugestões sozinho enquanto a conversa anda"><input type="checkbox" id="chkAuto"> automáticas</label>
+      <button id="btnSugerir" class="primario" title="Pedir sugestões agora (F2)">Sugerir agora <kbd>F2</kbd></button>
+    </div>
+    <div class="rolagem" id="listaSugestoes"></div>
+  </section>
+  <section class="coluna" aria-label="Transcrição">
+    <div class="topo-coluna">
+      <h2>Transcrição</h2>
+      <span id="infoSessao" class="dica" style="margin:0"></span>
+    </div>
+    <div class="rolagem" id="rolagemTranscricao">
+      <div id="listaTranscricao"></div>
+      <div id="interim"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <form id="formPergunta" autocomplete="off">
+    <input type="text" id="campoPergunta" placeholder="Pergunte algo ao assistente sobre a conversa (Enter envia)" maxlength="2000">
+    <button type="submit" class="primario" id="btnPerguntar">Perguntar</button>
+  </form>
+  <div class="dica"><kbd>F2</kbd> pede sugestões na hora · <kbd>/</kbd> vai para a pergunta · A transcrição é automática e pode errar; confira as sugestões antes de usar.</div>
+</footer>
+
+<div id="avisos" aria-live="polite"></div>
+
+<dialog id="dlgContexto">
+  <div class="dlg-topo"><h3>Contexto da conversa</h3><button class="discreto" data-fechar>Fechar</button></div>
+  <div class="dlg-corpo">
+    <div class="campo">
+      <label for="selModo">Tipo de conversa</label>
+      <select id="selModo">
+        <option value="reuniao">Reunião ou atendimento</option>
+        <option value="audiencia">Audiência ou oitiva</option>
+        <option value="livre">Livre</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label for="txtContexto">Resumo do caso e objetivo da conversa</label>
+      <textarea id="txtContexto" rows="12" placeholder="Cole aqui o resumo do expediente: o que foi noticiado, o que já foi feito, quem são as pessoas, o que você quer descobrir ou obter nesta conversa."></textarea>
+      <div class="ajuda">Vai junto com a transcrição em cada pedido ao Claude. Quanto mais claro o objetivo, melhores as sugestões.</div>
+    </div>
+    <div class="linha-campos" style="justify-content:flex-end">
+      <span id="contextoSalvo" class="dica" style="flex:1"></span>
+      <button id="btnSalvarContexto" class="primario">Salvar</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlgAjustes">
+  <div class="dlg-topo"><h3>Ajustes</h3><button class="discreto" data-fechar>Fechar</button></div>
+  <div class="dlg-corpo">
+    <fieldset>
+      <legend>Claude</legend>
+      <div class="campo">
+        <label for="campoChave">Chave da API</label>
+        <div class="linha-campos">
+          <input type="password" id="campoChave" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+          <button id="btnSalvarChave">Salvar chave</button>
+        </div>
+        <div class="ajuda" id="ajudaChave">Crie em <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">platform.claude.com/settings/keys</a>. A chave fica só neste computador.</div>
+      </div>
+      <div class="campo">
+        <label for="selModeloIA">Modelo</label>
+        <select id="selModeloIA"></select>
+      </div>
+      <div class="campo">
+        <label for="campoIntervalo">Intervalo mínimo entre sugestões automáticas (segundos)</label>
+        <input type="number" id="campoIntervalo" min="5" max="300" step="1">
+      </div>
+      <details>
+        <summary>Avançado</summary>
+        <div class="campo">
+          <label for="campoWorkspace">ID do workspace (só se a API pedir)</label>
+          <input type="text" id="campoWorkspace" placeholder="wrkspc_..." spellcheck="false">
+        </div>
+      </details>
+    </fieldset>
+
+    <fieldset>
+      <legend>Transcrição</legend>
+      <div class="campo">
+        <label for="selMotor">Quem transcreve</label>
+        <select id="selMotor">
+          <option value="whisper">Whisper neste computador (o áudio não sai daqui)</option>
+          <option value="navegador">Chrome (mais rápido; o áudio vai para o Google)</option>
+        </select>
+      </div>
+      <div class="campo so-whisper">
+        <label for="selFonte">O que ouvir</label>
+        <select id="selFonte">
+          <option value="microfone">Microfone (conversa na sala)</option>
+          <option value="computador">Áudio do computador (reunião on-line)</option>
+          <option value="ambos">Os dois (reunião on-line com fone de ouvido)</option>
+        </select>
+        <div class="ajuda">Em "Os dois", use fone de ouvido; senão o microfone também capta a voz dos outros e as falas se repetem.</div>
+      </div>
+      <div class="campo so-whisper">
+        <label for="selMicrofone">Microfone</label>
+        <div class="linha-campos">
+          <select id="selMicrofone"></select>
+          <button id="btnAtualizarMics" title="Ler os microfones de novo">Atualizar</button>
+        </div>
+      </div>
+      <div class="campo so-whisper">
+        <label for="selModeloWhisper">Modelo do Whisper</label>
+        <select id="selModeloWhisper">
+          <option value="auto">Automático (small no processador, large-v3-turbo com placa NVIDIA)</option>
+          <option value="base">base (mais rápido, erra mais)</option>
+          <option value="small">small (equilíbrio)</option>
+          <option value="medium">medium (mais preciso, lento sem placa de vídeo)</option>
+          <option value="large-v3-turbo">large-v3-turbo (precisa de placa de vídeo NVIDIA)</option>
+        </select>
+        <div class="ajuda">Se aparecer o aviso de transcrição atrasada, escolha um modelo menor.</div>
+      </div>
+      <div class="campo so-whisper">
+        <label for="txtVocabulario">Vocabulário (nomes e termos que devem sair certos)</label>
+        <textarea id="txtVocabulario" rows="3"></textarea>
+        <div class="ajuda">Separe por vírgulas. Ex.: nomes das partes, do município, de empresas e servidores do caso.</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Testar sem falar</legend>
+      <div class="campo">
+        <label for="arquivoTeste">Tocar uma gravação como se fosse ao vivo</label>
+        <div class="linha-campos">
+          <input type="file" id="arquivoTeste" accept="audio/*,video/*,.mp3,.m4a,.wav,.ogg,.opus,.mp4">
+          <select id="selVelocidade" style="max-width:110px">
+            <option value="1">1x</option>
+            <option value="1.5">1,5x</option>
+            <option value="2">2x</option>
+          </select>
+          <button id="btnTocarArquivo">Tocar</button>
+        </div>
+        <div class="ajuda">Ex.: uma gravação do Plaud. Usa o Whisper deste computador.</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sessões</legend>
+      <div class="campo">
+        <label for="campoPasta">Pasta onde cada conversa é gravada (.md)</label>
+        <div class="linha-campos">
+          <input type="text" id="campoPasta" placeholder="Padrão do programa" spellcheck="false">
+          <button id="btnAbrirPasta">Abrir pasta</button>
+        </div>
+        <div class="ajuda" id="ajudaPasta"></div>
+      </div>
+      <div class="linha-campos">
+        <button id="btnNovaSessao">Nova sessão (limpa a tela)</button>
+        <button id="btnSair" class="perigo">Fechar o programa</button>
+      </div>
+    </fieldset>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const ROTULOS_ORIGEM = { mic: "Microfone", pc: "Computador", navegador: "Microfone", arquivo: "Arquivo" };
+const TIPOS = { auto: "automática", agora: "pedida", pergunta: "pergunta" };
+const MARCAS = /\[(Não verificado|Inferência|Especulação)\]/g;
+const ROTULOS_SUG = /^(Pergunte|Diga|Atenção|Confira|Anote|Base legal):/;
+
+const est = { config: {}, ouvindo: false, simulando: "", sugestoes: new Map(), computador: false };
+
+// ---------- utilidades ----------
+function esc(t) { return String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function dinheiro(v) { return "US$ " + (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 }); }
+function segundos(v) { return v == null ? "" : v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + " s"; }
+async function api(caminho, dados) {
+  const r = await fetch(caminho, { method: "POST", headers: { "Content-Type": "application/json", "X-Assistente": "1" }, body: JSON.stringify(dados || {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || ("Erro " + r.status));
+  return j;
+}
+function avisar(texto, erro = false, ms = 6000) {
+  const caixa = $("#avisos");
+  // com uma janela de ajustes aberta, o aviso precisa ficar dentro dela para aparecer por cima
+  const destino = document.querySelector("dialog[open]") || document.body;
+  if (caixa.parentElement !== destino) destino.appendChild(caixa);
+  const d = document.createElement("div");
+  d.className = "aviso" + (erro ? " erro" : "");
+  d.textContent = texto;
+  caixa.appendChild(d);
+  setTimeout(() => d.remove(), ms);
+}
+async function tentar(fn) { try { return await fn(); } catch (e) { avisar(e.message, true, 9000); } }
+
+// ---------- sugestões ----------
+function formatarSugestao(texto) {
+  const linhas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let html = "", lista = [];
+  const fecharLista = () => { if (lista.length) { html += "<ul>" + lista.join("") + "</ul>"; lista = []; } };
+  for (const l of linhas) {
+    const item = /^[-*•]\s+/.test(l);
+    let t = esc(item ? l.replace(/^[-*•]\s+/, "") : l);
+    t = t.replace(MARCAS, (m, x) => `<span class="marca-honestidade">${x}</span>`);
+    t = t.replace(/^((?:<span class="marca-honestidade">[^<]*<\/span>\s*)*)(Pergunte|Diga|Atenção|Confira|Anote|Base legal):/, '$1<span class="rotulo">$2:</span>');
+    if (item) lista.push("<li>" + t + "</li>"); else { fecharLista(); html += "<p>" + t + "</p>"; }
+  }
+  fecharLista();
+  return html;
+}
+function renderCartao(s) {
+  let el = document.getElementById("sug-" + s.id);
+  const lista = $("#listaSugestoes");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "sug-" + s.id;
+    lista.prepend(el);
+    $(".vazio-lista")?.remove();
+  }
+  el.className = "cartao " + s.estado;
+  const meta = [s.hora, TIPOS[s.tipo] || s.tipo];
+  if (s.latencia_s != null) meta.push("1ª palavra em " + segundos(s.latencia_s));
+  if (s.estado === "pronta" && s.custo) meta.push(dinheiro(s.custo));
+  let corpo = "";
+  if (s.tipo === "pergunta" && s.pergunta) corpo += `<div class="pergunta">${esc(s.pergunta)}</div>`;
+  if (s.estado === "erro") corpo += `<div class="erro">${esc(s.erro)}</div>`;
+  else if (s.estado === "vazia") corpo += `<div class="vazia">Nada novo a sugerir neste momento.</div>`;
+  else corpo += s.texto ? formatarSugestao(s.texto) : `<div class="vazia">Pensando...</div>`;
+  el.innerHTML = `<div class="meta">${meta.map(esc).join(" · ")}</div>` + corpo;
+  marcarRecentes();
+  if (s.estado === "vazia") setTimeout(() => { el.remove(); marcarRecentes(); semSugestoes(); }, 5000);
+}
+function marcarRecentes() {
+  const cartoes = [...document.querySelectorAll("#listaSugestoes .cartao")];
+  cartoes.forEach((c, i) => { c.classList.toggle("nova", i === 0 && !c.classList.contains("vazia")); c.classList.toggle("antiga", i >= 2); });
+  cartoes.slice(40).forEach((c) => c.remove());
+}
+function semSugestoes() {
+  const lista = $("#listaSugestoes");
+  if (!lista.querySelector(".cartao") && !lista.querySelector(".vazio-lista")) {
+    const d = document.createElement("div");
+    d.className = "vazio-lista";
+    d.innerHTML = "As sugestões aparecem aqui. Clique em <b>Ouvir</b> e deixe a conversa correr, ou aperte <kbd>F2</kbd> quando precisar de ajuda.";
+    lista.appendChild(d);
+  }
+}
+
+// ---------- transcrição ----------
+function pertoDoFim(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 80; }
+function addLinha(l, rolar = true) {
+  const caixa = $("#rolagemTranscricao");
+  const perto = pertoDoFim(caixa);
+  const d = document.createElement("div");
+  d.className = "linha";
+  d.innerHTML = `<span class="hora">${esc(l.hora)}</span><span class="origem ${esc(l.origem)}">${esc(ROTULOS_ORIGEM[l.origem] || l.origem)}</span><span class="texto">${esc(l.texto)}</span>`;
+  $("#listaTranscricao").appendChild(d);
+  const todas = $("#listaTranscricao").children;
+  while (todas.length > 600) todas[0].remove();
+  if (rolar && perto) caixa.scrollTop = caixa.scrollHeight;
+}
+
+// ---------- estado geral ----------
+function aplicarConfig(c) {
+  est.config = c;
+  $("#chkAuto").checked = !!c.auto_sugerir;
+  $("#selModo").value = c.modo;
+  if (document.activeElement !== $("#txtContexto")) $("#txtContexto").value = c.contexto || "";
+  $("#selModeloIA").value = c.modelo_ia;
+  $("#campoIntervalo").value = c.intervalo_s;
+  $("#campoWorkspace").value = c.workspace_id || "";
+  $("#selMotor").value = c.motor;
+  $("#selFonte").value = c.fonte;
+  $("#selModeloWhisper").value = c.modelo_whisper;
+  if (document.activeElement !== $("#txtVocabulario")) $("#txtVocabulario").value = c.vocabulario || "";
+  $("#campoPasta").value = c.pasta_sessoes || "";
+  $("#ajudaPasta").textContent = "Gravando em: " + (c.pasta_sessoes_efetiva || "");
+  if (c.microfone != null) $("#selMicrofone").value = String(c.microfone);
+  document.querySelectorAll(".so-whisper").forEach((e) => (e.style.display = c.motor === "whisper" ? "" : "none"));
+  $("#ajudaChave").innerHTML = (c.tem_chave ? `Chave salva${c.chave_final ? " (termina em " + esc(c.chave_final) + ")" : ""}. ` : "")
+    + 'Crie em <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">platform.claude.com/settings/keys</a>. A chave fica só neste computador.';
+  const faixa = $("#faixa");
+  if (!c.tem_chave) {
+    faixa.innerHTML = 'Para receber sugestões, cole a chave da API do Claude em <a href="#" id="lnkAjustes">Ajustes</a>. A transcrição já funciona sem ela.';
+    faixa.classList.add("visivel");
+    $("#lnkAjustes").onclick = (e) => { e.preventDefault(); abrirAjustes(); };
+  } else faixa.classList.remove("visivel");
+}
+function aplicarOuvindo(ativo, simulando) {
+  est.ouvindo = ativo; est.simulando = simulando || "";
+  const b = $("#btnOuvir");
+  b.classList.toggle("ativo", ativo);
+  b.classList.toggle("perigo", ativo);
+  b.classList.toggle("primario", !ativo);
+  b.querySelector(".rotulo-btn").textContent = ativo ? (simulando ? "Parar teste" : "Parar") : "Ouvir";
+  if (!ativo) { $("#niveis").innerHTML = ""; $("#interim").textContent = ""; }
+}
+function aplicarStatus(s) {
+  const el = $("#status");
+  el.textContent = s.texto;
+  el.className = s.nivel === "erro" ? "erro" : s.nivel === "pronto" ? "pronto" : "";
+}
+function aplicarEstado(m) {
+  aplicarConfig(m.config);
+  aplicarStatus(m.status);
+  aplicarOuvindo(m.ouvindo, m.simulando);
+  est.computador = m.computador_disponivel;
+  const sel = $("#selModeloIA");
+  sel.innerHTML = Object.entries(m.modelos_ia).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join("");
+  sel.value = m.config.modelo_ia;
+  [...$("#selFonte").options].forEach((o) => { if (o.value !== "microfone") o.disabled = !m.computador_disponivel; });
+  $("#listaTranscricao").innerHTML = "";
+  m.linhas.forEach((l) => addLinha(l, false));
+  $("#rolagemTranscricao").scrollTop = $("#rolagemTranscricao").scrollHeight;
+  $("#listaSugestoes").innerHTML = "";
+  est.sugestoes.clear();
+  m.sugestoes.filter((s) => s.estado !== "vazia").forEach((s) => { est.sugestoes.set(s.id, s); renderCartao(s); });
+  semSugestoes();
+  $("#custo").textContent = dinheiro(m.custo_total);
+  $("#iaOcupada").classList.toggle("visivel", !!m.ia_ocupada);
+  $("#infoSessao").textContent = m.arquivo ? "gravando a sessão" : "";
+}
+function aplicarNiveis(niveis, fala) {
+  const caixa = $("#niveis");
+  for (const [origem, valor] of Object.entries(niveis)) {
+    let m = caixa.querySelector(`[data-origem="${origem}"]`);
+    if (!m) {
+      m = document.createElement("div");
+      m.className = "medidor"; m.dataset.origem = origem;
+      m.innerHTML = `<span>${esc(ROTULOS_ORIGEM[origem] || origem)}</span><span class="barra"><i></i></span>`;
+      caixa.appendChild(m);
+    }
+    m.querySelector("i").style.width = Math.round(valor * 100) + "%";
+    m.classList.toggle("falando", !!(fala && fala[origem]));
+  }
+  if (!Object.keys(niveis).length) caixa.innerHTML = "";
+}
+
+// ---------- eventos do programa ----------
+let fonteEventos = null;
+function conectar() {
+  fonteEventos = new EventSource("/eventos");
+  fonteEventos.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    switch (m.tipo) {
+      case "estado": aplicarEstado(m); break;
+      case "config": aplicarConfig(m.config); break;
+      case "status": aplicarStatus(m); break;
+      case "aviso": avisar(m.texto); break;
+      case "ouvindo": aplicarOuvindo(m.ativo, m.simulando); if (!m.ativo) pararReconhecimento(); break;
+      case "nivel": aplicarNiveis(m.niveis, m.fala); break;
+      case "linha": addLinha(m.linha); $("#infoSessao").textContent = "gravando a sessão"; break;
+      case "ia_ocupada": $("#iaOcupada").classList.toggle("visivel", m.ocupada); break;
+      case "sessao_nova":
+        $("#listaTranscricao").innerHTML = ""; $("#listaSugestoes").innerHTML = ""; est.sugestoes.clear();
+        semSugestoes(); $("#custo").textContent = dinheiro(0); $("#infoSessao").textContent = ""; break;
+      case "sugestao_inicio": est.sugestoes.set(m.sugestao.id, m.sugestao); renderCartao(m.sugestao); break;
+      case "sugestao_trecho": {
+        const s = est.sugestoes.get(m.id); if (!s) break;
+        s.texto += m.trecho; renderCartao(s); break;
+      }
+      case "sugestao_fim": {
+        const s = est.sugestoes.get(m.id); if (!s) break;
+        Object.assign(s, { texto: m.texto, estado: m.estado, custo: m.custo, latencia_s: m.latencia_s });
+        renderCartao(s); $("#custo").textContent = dinheiro(m.custo_total); break;
+      }
+      case "sugestao_erro": {
+        const s = est.sugestoes.get(m.id); if (!s) break;
+        Object.assign(s, { estado: "erro", erro: m.erro }); renderCartao(s); break;
+      }
+    }
+  };
+  fonteEventos.onerror = () => aplicarStatus({ texto: "Sem conexão com o programa. Ele foi fechado? Abra pelo atalho de novo.", nivel: "erro" });
+}
+
+// ---------- reconhecimento pelo Chrome ----------
+let reconhecedor = null, reconhecendo = false;
+function iniciarReconhecimento() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { avisar("Este navegador não tem reconhecimento de voz. Abra a página no Chrome.", true); return false; }
+  reconhecedor = new SR();
+  const idioma = (est.config.idioma || "pt").toLowerCase();
+  reconhecedor.lang = idioma === "pt" ? "pt-BR" : idioma;
+  reconhecedor.continuous = true;
+  reconhecedor.interimResults = true;
+  reconhecedor.onresult = (ev) => {
+    let parcial = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i];
+      if (r.isFinal) { const t = r[0].transcript.trim(); if (t) api("/api/texto", { texto: t }).catch(() => {}); }
+      else parcial += r[0].transcript;
+    }
+    $("#interim").textContent = parcial;
+  };
+  reconhecedor.onerror = (ev) => {
+    if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+      avisar("O Chrome não liberou o microfone para esta página. Clique no cadeado da barra de endereço e permita o microfone.", true, 12000);
+      reconhecendo = false; tentar(() => api("/api/parar"));
+    } else if (ev.error === "network") avisar("O reconhecimento do Chrome precisa de internet.", true);
+    else if (ev.error === "audio-capture") avisar("Nenhum microfone encontrado pelo Chrome.", true);
+  };
+  reconhecedor.onend = () => { if (reconhecendo) setTimeout(() => { try { reconhecedor.start(); } catch (e) {} }, 200); };
+  reconhecendo = true;
+  try { reconhecedor.start(); } catch (e) {}
+  return true;
+}
+function pararReconhecimento() {
+  reconhecendo = false;
+  if (reconhecedor) { try { reconhecedor.stop(); } catch (e) {} }
+  $("#interim").textContent = "";
+}
+
+// ---------- ações ----------
+$("#btnOuvir").onclick = () => tentar(async () => {
+  if (est.ouvindo) { pararReconhecimento(); await api("/api/parar"); return; }
+  if (est.config.motor === "navegador" && !iniciarReconhecimento()) return;
+  try { await api("/api/iniciar"); } catch (e) { pararReconhecimento(); throw e; }
+});
+$("#btnSugerir").onclick = () => tentar(() => api("/api/sugerir"));
+$("#chkAuto").onchange = (e) => tentar(() => api("/api/config", { auto_sugerir: e.target.checked }));
+$("#formPergunta").onsubmit = (e) => {
+  e.preventDefault();
+  const campo = $("#campoPergunta");
+  const texto = campo.value.trim();
+  if (!texto) return;
+  tentar(async () => { await api("/api/perguntar", { texto }); campo.value = ""; });
+};
+document.addEventListener("keydown", (e) => {
+  if (e.key === "F2") { e.preventDefault(); $("#btnSugerir").click(); }
+  const digitando = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+  if (e.key === "/" && !digitando && !document.querySelector("dialog[open]")) { e.preventDefault(); $("#campoPergunta").focus(); }
+});
+
+function abrirAjustes() { carregarMicrofones(); $("#dlgAjustes").showModal(); }
+$("#btnAjustes").onclick = abrirAjustes;
+$("#btnContexto").onclick = () => { $("#contextoSalvo").textContent = ""; $("#dlgContexto").showModal(); };
+document.querySelectorAll("[data-fechar]").forEach((b) => (b.onclick = () => b.closest("dialog").close()));
+
+$("#btnSalvarContexto").onclick = () => tentar(async () => {
+  await api("/api/config", { contexto: $("#txtContexto").value, modo: $("#selModo").value });
+  $("#contextoSalvo").textContent = "Salvo.";
+});
+$("#selModo").onchange = (e) => tentar(() => api("/api/config", { modo: e.target.value }));
+$("#btnSalvarChave").onclick = () => tentar(async () => {
+  const chave = $("#campoChave").value.trim();
+  if (!chave) throw new Error("Cole a chave antes de salvar.");
+  if (!chave.startsWith("sk-ant-")) throw new Error("A chave da API começa com sk-ant-.");
+  await api("/api/config", { api_key: chave });
+  $("#campoChave").value = "";
+  avisar("Chave salva.");
+});
+const salvarAoMudar = (sel, campo, conv = (v) => v) => ($(sel).onchange = (e) => tentar(() => api("/api/config", { [campo]: conv(e.target.value) })));
+salvarAoMudar("#selModeloIA", "modelo_ia");
+salvarAoMudar("#campoIntervalo", "intervalo_s", (v) => parseInt(v, 10) || 20);
+salvarAoMudar("#campoWorkspace", "workspace_id");
+salvarAoMudar("#selMotor", "motor");
+salvarAoMudar("#selFonte", "fonte");
+salvarAoMudar("#selModeloWhisper", "modelo_whisper");
+salvarAoMudar("#selMicrofone", "microfone", (v) => (v === "" ? null : parseInt(v, 10)));
+salvarAoMudar("#txtVocabulario", "vocabulario");
+salvarAoMudar("#campoPasta", "pasta_sessoes");
+
+async function carregarMicrofones() {
+  try {
+    const r = await fetch("/api/dispositivos");
+    const d = await r.json();
+    const sel = $("#selMicrofone");
+    sel.innerHTML = '<option value="">Padrão do Windows</option>' +
+      d.microfones.map((m) => `<option value="${m.indice}">${esc(m.nome)}${m.padrao ? " (padrão)" : ""}</option>`).join("");
+    sel.value = est.config.microfone == null ? "" : String(est.config.microfone);
+    if (d.erro) avisar(d.erro, true);
+  } catch (e) { avisar("Não consegui ler os microfones.", true); }
+}
+$("#btnAtualizarMics").onclick = carregarMicrofones;
+
+$("#btnTocarArquivo").onclick = () => tentar(async () => {
+  const arq = $("#arquivoTeste").files[0];
+  if (!arq) throw new Error("Escolha um arquivo de áudio primeiro.");
+  if (est.config.motor !== "whisper") throw new Error("O teste com arquivo usa o Whisper. Em 'Quem transcreve', escolha o Whisper.");
+  const btn = $("#btnTocarArquivo");
+  btn.disabled = true; btn.textContent = "Enviando...";
+  try {
+    const vel = $("#selVelocidade").value;
+    const r = await fetch(`/api/simular?nome=${encodeURIComponent(arq.name)}&velocidade=${vel}`, { method: "POST", headers: { "X-Assistente": "1", "Content-Type": "application/octet-stream" }, body: arq });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erro || "Falha ao enviar o arquivo.");
+    $("#dlgAjustes").close();
+  } finally { btn.disabled = false; btn.textContent = "Tocar"; }
+});
+$("#btnAbrirPasta").onclick = () => tentar(async () => {
+  const j = await api("/api/abrir_pasta");
+  if (!navigator.userAgent.includes("Windows")) avisar("Pasta: " + j.pasta);
+});
+$("#btnNovaSessao").onclick = () => tentar(async () => {
+  if (!confirm("Começar uma sessão nova? A tela é limpa; a sessão atual continua gravada na pasta.")) return;
+  await api("/api/nova_sessao");
+  $("#dlgAjustes").close();
+});
+$("#btnSair").onclick = () => tentar(async () => {
+  if (!confirm("Fechar o programa?")) return;
+  pararReconhecimento();
+  await api("/api/sair");
+  if (fonteEventos) fonteEventos.close();
+  document.body.innerHTML = '<p style="padding:40px;font-size:18px">O Assistente ao Vivo foi fechado. Para abrir de novo, use o atalho na Área de Trabalho.</p>';
+});
+
+semSugestoes();
+conectar();
+</script>
+</body>
+</html>
